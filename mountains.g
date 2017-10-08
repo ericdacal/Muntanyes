@@ -2,6 +2,7 @@
 <<
 #include <string>
 #include <iostream>
+#include <stdlib.h>
 #include <map>
 #include <vector>
 using namespace std;
@@ -29,19 +30,14 @@ typedef vector<Section> Mountain;
 //map< string, Mountain > Mountains;
 
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 // struct to store information about tokens
 typedef struct {
   string kind;
   string text;
 } Attrib;
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
 
 
 // function to fill token information (predeclaration)
@@ -142,20 +138,32 @@ void ASTPrint(AST *a) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void peak(AST *a) {
+Mountain peak(AST *a) {
 }
 
-void valley(AST *a) {
-}
+/*Mountain valley(AST *a) {
+}*/
 
-void concatenation(AST *a) {
-  if(root->kind == ";") {
-    concatenation(root->down);
-    concatenation(root->right);
+
+//Store the concatenation of Section in a Mountain
+Mountain concatenation(AST *a) {
+  if(a == NULL) {
+    Mountain f;
+    return f;
   }
-  else if(root->kind == "*") {
-
-
+  else if(a->kind == ";") {
+    Mountain l = concatenation(a->down);
+    Mountain r = concatenation(a->right);
+    l.insert(l.end(), r.begin(), r.end());
+    return l;
+  }
+  else if(a->kind == "*") {
+    Section s;
+    s.rep = atoi((a->down->kind).c_str());
+    s.sym = a->down->right->kind.c_str()[0];
+    Mountain m;
+    m.push_back(s);
+    return m;
   }
 }
 
@@ -167,10 +175,11 @@ void evaluate(AST *root) {
     if(root == NULL) return;
     else if(root->kind == "is") {
         if(root->down->right->kind == "Peak") peak(root->down);
-        else if(root->down->right->kind == "Valley") valley(root->down);
-        else if(root->down->right->kind == ";") {
-          concatenation(root->down->right->down);
-          concatenation(root->down->right->right);
+        //else if(root->down->right->kind == "Valley") valley(root->down);
+        if(root->down->right->kind == ";") {
+          Mountain l = concatenation(root->down->right->down);
+          Mountain r = concatenation(root->down->right->right);
+          l.insert(l.end(), r.begin(), r.end());
         }
     }
     evaluate(root->right);
