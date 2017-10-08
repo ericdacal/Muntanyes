@@ -8,31 +8,6 @@
 using namespace std;
 
 
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//                                      Structures to work and store mountains
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// struct to store the diferents sections of the mountain
-typedef struct{
-    int rep;
-    char sym;
-}  Section;
-
-//Define mountain as a vector of Sections
-typedef vector<Section> Mountain;
-
-//Struct that contain mountains and associates
-//moutains with her name variable
-//map< string, Mountain > Mountains;
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 // struct to store information about tokens
 typedef struct {
   string kind;
@@ -132,17 +107,87 @@ void ASTPrint(AST *a) {
 }
 
 
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                      Structures to work and store mountains
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// struct to store the diferents sections of the mountain
+typedef struct{
+    int rep;
+    char sym;
+}  Section;
+
+//Define mountain as a vector of Sections
+typedef vector<Section> Mountain;
+
+//Struct that contain mountains and associates
+//moutains with her name variable
+map< string, Mountain > Mountains;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                      Functions to work with mountains
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+
+
+
 Mountain peak(AST *a) {
+  Section up;
+  up.rep = atoi((a->right->down->kind).c_str());
+  up.sym = '/';
+
+  Section top;
+  top.rep = atoi((a->right->down->right->kind).c_str());
+  top.sym = '-';
+
+  Section down;
+  down.rep = atoi((a->right->down->right->right->kind).c_str());
+  down.sym = '-';
+
+  Mountain m;
+
+  m.push_back(up);
+  m.push_back(top);
+  m.push_back(down);
+
+  return m;
 }
 
-/*Mountain valley(AST *a) {
-}*/
+Mountain valley(AST *a) {
+  Section up;
+  up.rep = atoi((a->right->down->right->right->kind).c_str());
+  up.sym = '/';
+
+  Section top;
+  top.rep = atoi((a->right->down->right->kind).c_str());
+  top.sym = '-';
+
+  Section down;
+  down.rep = atoi((a->right->down->kind).c_str());
+  down.sym = '-';
+
+  Mountain m;
+
+  m.push_back(down);
+  m.push_back(up);
+  m.push_back(top);
+
+  return m;
+}
 
 
 //Store the concatenation of Section in a Mountain
@@ -174,12 +219,19 @@ Mountain concatenation(AST *a) {
 void evaluate(AST *root) {
     if(root == NULL) return;
     else if(root->kind == "is") {
-        if(root->down->right->kind == "Peak") peak(root->down);
-        //else if(root->down->right->kind == "Valley") valley(root->down);
-        if(root->down->right->kind == ";") {
+        if(root->down->right->kind == "Peak") {
+          Mountain m = peak(root->down);
+          Mountains[root->down->kind] = m;
+        }
+        else if(root->down->right->kind == "Valley") {
+          Mountain m = valley(root->down);
+          Mountains[root->down->kind] = m;
+        }
+        else if(root->down->right->kind == ";") {
           Mountain l = concatenation(root->down->right->down);
           Mountain r = concatenation(root->down->right->right);
           l.insert(l.end(), r.begin(), r.end());
+          Mountains[root->down->kind] = l;
         }
     }
     evaluate(root->right);
