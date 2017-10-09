@@ -123,13 +123,17 @@ void ASTPrint(AST *a) {
 typedef struct{
     int rep;
     char sym;
+    int height;
 }  Section;
 
-//Define mountain as a vector of Sections
-typedef vector<Section> Mountain;
+typedef struct {
+  vector<Section> sections;
+  int max_height;
+  int min_height;
+} Mountain;
 
 //Struct that contain mountains and associates
-//moutains with her name variable
+//mountains with her name variable
 map< string, Mountain > Mountains;
 
 //Struct that contain numeric variables and associates
@@ -151,7 +155,22 @@ map< string, int> numVars;
 
 
 void draw(Mountain m) {
-    
+  /*  for(int i = m.max_height; i > m.min_height; --i) {
+        for(int j = 0; j < m.sections.size(); ++j) {
+                if(m.sections[j].height == i) {
+                    if(m.sections[j].sym != '-') {
+                      --m.sections[j].height;
+                      cout << m.sections[j].sym;
+                    }
+                    else {
+
+                    }
+                }
+                else cout << '*';
+        }
+        cout << endl;
+    }*/
+
 }
 
 
@@ -162,41 +181,107 @@ int num_operation(AST *a) {
     else if(a->kind == "/") return num_operation(a->down) / num_operation(a->down->right);
     else if(a->kind == "*") return num_operation(a->down) * num_operation(a->down->right);
     else if(a->kind == "intconst") return atoi((a->text).c_str());
+    else if(a->kind == "Height") return Mountains[a->down->text].max_height;
     else return numVars[a->text];
 }
 
+
+bool match(const Mountain& a, const Mountain& b) {
+    if(a.sections.size() == b.sections.size()) {
+        for(int i = 0; i < a.sections.size(); ++i) {
+            if(a.sections[i].sym != b.sections[i].sym or a.sections[i].rep != b.sections[i].rep) return false;
+        }
+    }
+    return true;
+}
+
+bool wellformed(const Mountain& a) {
+    bool up, down, top;
+    up = down = top = false;
+    int i = 0;
+    while(not up or not down or not top and i < a.sections.size()) {
+        if(a.sections[i].sym == '/') up = true;
+        else if(a.sections[i].sym == '-') top = true;
+        else if(a.sections[i].sym == '\\') down = true;
+        ++i;
+    }
+    return up and top and down;
+}
+
+bool bool_operation(AST *a) {
+    if(a->kind == "OR") return (bool_operation(a->down) or bool_operation(a->down->right));
+    else if(a->kind == "AND") return (bool_operation(a->down) and bool_operation(a->down->right));
+    else if(a->kind == "NOT") return not (bool_operation(a->down));
+    else if(a->kind == "<") return (num_operation(a->down) < num_operation(a->down->right));
+    else if(a->kind == ">") return (num_operation(a->down) > num_operation(a->down->right));
+    else if(a->kind == "==") return (num_operation(a->down) == num_operation(a->down->right));
+    else if(a->kind == "Match") return match(Mountains[a->down->text], Mountains[a->down->right->text]);
+    else if(a->kind == "Wellformed") return wellformed(Mountains[a->down->text]);
+}
 
 
 
 
 Mountain peak(AST *a, int type) {
     Mountain m;
+    m.max_height = 0;
+    m.min_height = 0;
     if(type < 3) {
         Section s;
         s.rep = num_operation(a);
-        
-        if(type == 0) s.sym = '\\';
-        else if(type == 1) s.sym = '-';
-        else s.sym = '/';
-
         m = peak(a->right, type + 1);
-        m.push_back(s);
+
+        if(type == 0) {
+            s.sym = '\\';
+            if(m.sections.size() == 0) s.height = s.rep;
+            else s.height = m.sections[m.sections.size() - 1].height - s.rep;
+        }
+        else if(type == 1) {
+            s.sym = '-';
+            if(m.sections.size() == 0) s.height = s.rep;
+            else s.height = m.sections[m.sections.size() - 1].height;
+        }
+        else {
+            s.sym = '/';
+            if(m.sections.size() == 0) s.height = s.rep;
+            else s.height = m.sections[m.sections.size() - 1].height + s.rep;
+        }
+
+
+        if(m.max_height < s.height) m.max_height = s.height;
+        if(m.min_height > s.height) m.min_height = s.height;
+        m.sections.push_back(s);
     }
     return m;
 }
 
 Mountain valley(AST *a, int type) {
     Mountain m;
+    m.max_height = 0;
+    m.min_height = 0;
     if(type < 3) {
         Section s;
         s.rep = num_operation(a);
-
-        if(type == 0) s.sym = '/';
-        else if(type == 1) s.sym = '-';
-        else s.sym = '\\';
-
         m = valley(a->right, type + 1);
-        m.push_back(s);
+        if(type == 0) {
+            s.sym = '/';
+            if(m.sections.size() == 0) s.height = s.rep;
+            else s.height = m.sections[m.sections.size() - 1].height + s.rep;
+        }
+        else if(type == 1) {
+            s.sym = '-';
+            if(m.sections.size() == 0) s.height = s.rep;
+            else s.height = m.sections[m.sections.size() - 1].height;
+        }
+        else {
+          s.sym = '\\';
+          if(m.sections.size() == 0) s.height = -s.rep;
+          else s.height = m.sections[m.sections.size() - 1].height - s.rep;
+        }
+
+        if(m.max_height < s.height) m.max_height = s.height;
+        if(m.min_height > s.height) m.min_height = s.height;
+        m.sections.push_back(s);
     }
     return m;
 }
@@ -211,7 +296,7 @@ Mountain concatenation(AST *a) {
     else if(a->kind == ";") {
         Mountain l = concatenation(a->down);
         Mountain r = concatenation(a->down->right);
-        l.insert(l.end(), r.begin(), r.end());
+        l.sections.insert(l.sections.end(), r.sections.begin(), r.sections.end());
         return l;
     }
     else if(a->kind == "*") {
@@ -219,7 +304,7 @@ Mountain concatenation(AST *a) {
         s.rep = atoi((a->down->text).c_str());
         s.sym = a->down->right->kind.c_str()[0];
         Mountain m;
-        m.push_back(s);
+        m.sections.push_back(s);
         return m;
     }
     else {
@@ -272,9 +357,9 @@ int main() {
   evaluate(root->down);
   ASTPrint(root);
   for (map<string,Mountain>::iterator it=Mountains.begin(); it!=Mountains.end(); ++it) {
-      cout << it->first << endl;
-      for(int i = 0; i < it->second.size(); ++i) {
-          cout << it->second[i].rep << ' ' << it->second[i].sym << ' ';
+      cout << it->first << " max_height: " << it->second.max_height << " min_height: " << it->second.min_height << ' ' << endl;
+      for(int i = 0; i < it->second.sections.size(); ++i) {
+          cout << it->second.sections[i].rep << ' ' << it->second.sections[i].sym << " h: " << it->second.sections[i].height << ' ';
       }
       cout << endl;
   }
