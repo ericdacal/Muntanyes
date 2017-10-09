@@ -37,14 +37,18 @@ AST *root;
 
 // function to fill token information
 void zzcr_attr(Attrib *attr, int type, char *text) {
-  // if (type == ID) {
-  //   attr->kind = "id";
-  //   attr->text = text;
-  // }
-  // else {
-    attr->kind = text;
-    attr->text = "";
-  // }
+    if (type == VAR) {
+        attr->kind = "id";
+        attr->text = text;
+    }
+    else if (type == NUM) {
+        attr->kind = "intconst";
+        attr->text = text;
+    }
+    else {
+        attr->kind = text;
+        attr->text = "";
+    }
 }
 
 // function to create a new AST node
@@ -128,6 +132,10 @@ typedef vector<Section> Mountain;
 //moutains with her name variable
 map< string, Mountain > Mountains;
 
+//Struct that contain numeric variables and associates
+//numeric variables with her name variable
+map< string, int> numVars;
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -139,77 +147,84 @@ map< string, Mountain > Mountains;
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                      Functions to work with mountains
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
-
-Mountain peak(AST *a) {
-  Section up;
-  up.rep = atoi((a->right->down->kind).c_str());
-  up.sym = '/';
-
-  Section top;
-  top.rep = atoi((a->right->down->right->kind).c_str());
-  top.sym = '-';
-
-  Section down;
-  down.rep = atoi((a->right->down->right->right->kind).c_str());
-  down.sym = '-';
-
-  Mountain m;
-
-  m.push_back(up);
-  m.push_back(top);
-  m.push_back(down);
-
-  return m;
+void draw(Mountain m) {
+    
 }
 
-Mountain valley(AST *a) {
-  Section up;
-  up.rep = atoi((a->right->down->right->right->kind).c_str());
-  up.sym = '/';
 
-  Section top;
-  top.rep = atoi((a->right->down->right->kind).c_str());
-  top.sym = '-';
 
-  Section down;
-  down.rep = atoi((a->right->down->kind).c_str());
-  down.sym = '-';
+int num_operation(AST *a) {
+    if(a->kind == "+") return num_operation(a->down) + num_operation(a->down->right);
+    else if(a->kind == "-") return num_operation(a->down) - num_operation(a->down->right);
+    else if(a->kind == "/") return num_operation(a->down) / num_operation(a->down->right);
+    else if(a->kind == "*") return num_operation(a->down) * num_operation(a->down->right);
+    else if(a->kind == "intconst") return atoi((a->text).c_str());
+    else return numVars[a->text];
+}
 
-  Mountain m;
 
-  m.push_back(down);
-  m.push_back(up);
-  m.push_back(top);
 
-  return m;
+
+
+Mountain peak(AST *a, int type) {
+    Mountain m;
+    if(type < 3) {
+        Section s;
+        s.rep = num_operation(a);
+        
+        if(type == 0) s.sym = '\\';
+        else if(type == 1) s.sym = '-';
+        else s.sym = '/';
+
+        m = peak(a->right, type + 1);
+        m.push_back(s);
+    }
+    return m;
+}
+
+Mountain valley(AST *a, int type) {
+    Mountain m;
+    if(type < 3) {
+        Section s;
+        s.rep = num_operation(a);
+
+        if(type == 0) s.sym = '/';
+        else if(type == 1) s.sym = '-';
+        else s.sym = '\\';
+
+        m = valley(a->right, type + 1);
+        m.push_back(s);
+    }
+    return m;
 }
 
 
 //Store the concatenation of Section in a Mountain
 Mountain concatenation(AST *a) {
-  if(a == NULL) {
-    Mountain f;
-    return f;
-  }
-  else if(a->kind == ";") {
-    Mountain l = concatenation(a->down);
-    Mountain r = concatenation(a->right);
-    l.insert(l.end(), r.begin(), r.end());
-    return l;
-  }
-  else if(a->kind == "*") {
-    Section s;
-    s.rep = atoi((a->down->kind).c_str());
-    s.sym = a->down->right->kind.c_str()[0];
-    Mountain m;
-    m.push_back(s);
-    return m;
-  }
+    if(a == NULL) {
+        Mountain f;
+        return f;
+    }
+    else if(a->kind == ";") {
+        Mountain l = concatenation(a->down);
+        Mountain r = concatenation(a->down->right);
+        l.insert(l.end(), r.begin(), r.end());
+        return l;
+    }
+    else if(a->kind == "*") {
+        Section s;
+        s.rep = atoi((a->down->text).c_str());
+        s.sym = a->down->right->kind.c_str()[0];
+        Mountain m;
+        m.push_back(s);
+        return m;
+    }
+    else {
+        return Mountains[a->text];
+    }
 }
 
 
@@ -220,18 +235,29 @@ void evaluate(AST *root) {
     if(root == NULL) return;
     else if(root->kind == "is") {
         if(root->down->right->kind == "Peak") {
-          Mountain m = peak(root->down);
-          Mountains[root->down->kind] = m;
+            Mountain m = peak(root->down->right->down, 0);
+            Mountains[root->down->text] = m;
         }
         else if(root->down->right->kind == "Valley") {
-          Mountain m = valley(root->down);
-          Mountains[root->down->kind] = m;
+            Mountain m = valley(root->down->right->down, 0);
+            Mountains[root->down->text] = m;
         }
         else if(root->down->right->kind == ";") {
-          Mountain l = concatenation(root->down->right->down);
-          Mountain r = concatenation(root->down->right->right);
-          l.insert(l.end(), r.begin(), r.end());
-          Mountains[root->down->kind] = l;
+            Mountain m  = concatenation(root->down->right);
+            Mountains[root->down->text] = m;
+        }
+        else {
+            int num = num_operation(root->down->right);
+            numVars[root->down->text] = num;
+        }
+    }
+    else if(root->kind == "Draw") {
+        if(root->down->kind == ";") {
+            Mountain m = concatenation(root->down);
+            draw(m);
+        }
+        else {
+            draw(Mountains[root->down->text]);
         }
     }
     evaluate(root->right);
@@ -245,6 +271,13 @@ int main() {
   ANTLR(mountains(&root), stdin);
   evaluate(root->down);
   ASTPrint(root);
+  for (map<string,Mountain>::iterator it=Mountains.begin(); it!=Mountains.end(); ++it) {
+      cout << it->first << endl;
+      for(int i = 0; i < it->second.size(); ++i) {
+          cout << it->second[i].rep << ' ' << it->second[i].sym << ' ';
+      }
+      cout << endl;
+  }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
