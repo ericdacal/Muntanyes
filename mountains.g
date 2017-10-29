@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <map>
 #include <vector>
+#include <queue>
 using namespace std;
 
 
@@ -118,6 +119,20 @@ void ASTPrint(AST *a) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+//Definitions of colours
+#define RESET   "\033[0m"
+#define GREEN   "\033[32m"      /* Green */
+#define WHITE   "\033[37m"      /* White */
+#define CYAN    "\033[36m"      /* Cyan */
+#define RED     "\033[31m"      /* Red */
+
+
+
+//Contador de lineas
+int line_count = 0;
+
+//control stat
+bool stat;
 
 // struct to store the diferents sections of the mountain
 typedef struct{
@@ -132,13 +147,21 @@ typedef struct {
   int min_height;
 } Mountain;
 
-//Struct that contain mountains and associates
+typedef struct {
+    string description;
+    int inst;
+} Error;
+
+//Diccionary that contain mountains and associates
 //mountains with her name variable
 map< string, Mountain > Mountains;
 
 //Struct that contain numeric variables and associates
 //numeric variables with her name variable
 map< string, int> numVars;
+
+//Struct that contain a syntactic erros of code
+queue<Error> errors;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -154,25 +177,93 @@ map< string, int> numVars;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void draw(Mountain m) {
-  /*  for(int i = m.max_height; i > m.min_height; --i) {
+void draw(Mountain m, string name) {
+    //for(int i = 0; i < m.sections.size(); ++i) cout << m.sections[i].sym << ' ' << m.sections[i].height  << ' ';
+    //cout << endl;
+    cout << m.max_height << ' ' << m.min_height << endl;
+    for(int i = 0; i < m.sections.size(); ++i) cout << m.sections[i].sym << ' ' << m.sections[i].height << ' ';
+    cout << endl;
+    for(int i = m.max_height + 1; i > m.min_height and stat; --i) {
+        bool up;
+        up =  false;
         for(int j = 0; j < m.sections.size(); ++j) {
-                if(m.sections[j].height == i) {
-                    if(m.sections[j].sym != '-') {
-                      --m.sections[j].height;
-                      cout << m.sections[j].sym;
-                    }
-                    else {
-
-                    }
+            int dh;
+            if(m.sections[j].sym == '/')  {
+                dh = 1;
+                up = true;
+            }
+            else if(m.sections[j].sym == '-') dh = 0;
+            else dh = -1;
+            int h;
+            if(j == 0) h = 1;
+            else {
+                if(dh == 0) {
+                    if(m.sections[j - 1].sym == '/') h = m.sections[j - 1].height + 1;
+                    else h = m.sections[j - 1].height - 1;
                 }
-                else cout << '*';
+                else if(dh == -1) h = m.sections[j - 1].height - 1;
+                else h = m.sections[j - 1].height;
+            }
+            int k = 0;
+            while(k < m.sections[j].rep) {
+                if(i == h + (k * dh)){
+                    if(m.sections[j].sym == '-') cout << WHITE <<  m.sections[j].sym << RESET;
+                    else if(up) cout << GREEN <<  m.sections[j].sym << RESET;
+                }
+                else
+                {
+                    if(i < h + (k * dh)) cout << GREEN << '#' << RESET;
+                    else cout << CYAN << '#' << RESET;
+                }
+                ++k;
+            }
         }
         cout << endl;
-    }*/
+    }
+    if(stat) cout << "l'altitud final de " <<  name <<  " és: " << m.max_height << endl;
 
 }
 
+Mountain complete(AST *a) {
+    Mountain m;
+    if (Mountains.find(a->text) == Mountains.end() ) {
+        m = Mountains[a->text];
+        bool top, down, up;
+        top = down = up = false;
+        int i = 0;
+        while(i < m.sections.size()) {
+            if(m.sections[i].sym == '/') up = true;
+            else if(m.sections[i].sym == '-') top = true;
+            else if(m.sections[i].sym == '\\') down = true;
+            ++i;
+        }
+        Section s;
+        int hant = m.sections[m.sections.size() - 1].height;
+        if(not top) {
+            s.sym = '-';
+            s.rep = 1;
+            if(m.sections[m.sections.size() - 1].sym == '/') s.height = hant + 1;
+            else s.height = hant - 1;
+            hant = s.height;
+            m.sections.push_back(s);
+        }
+        if(not down) {
+            s.sym = '\\';
+            s.rep = 1;
+            s.height = hant - 1;
+            hant = s.height;
+            m.sections.push_back(s);
+        }
+        if(not up) {
+            s.sym = '/';
+            s.rep = 1;
+            s.height = hant + 1;
+            hant = s.height;
+            m.sections.push_back(s);
+        }
+    }
+    return m;
+}
 
 
 int num_operation(AST *a) {
@@ -187,19 +278,14 @@ int num_operation(AST *a) {
 
 
 bool match(const Mountain& a, const Mountain& b) {
-    if(a.sections.size() == b.sections.size()) {
-        for(int i = 0; i < a.sections.size(); ++i) {
-            if(a.sections[i].sym != b.sections[i].sym or a.sections[i].rep != b.sections[i].rep) return false;
-        }
-    }
-    return true;
+    return a.max_height == b.max_height;
 }
 
 bool wellformed(const Mountain& a) {
     bool up, down, top;
     up = down = top = false;
     int i = 0;
-    while(not up or not down or not top and i < a.sections.size()) {
+    while((not up or not down or not top) and i < a.sections.size()) {
         if(a.sections[i].sym == '/') up = true;
         else if(a.sections[i].sym == '-') top = true;
         else if(a.sections[i].sym == '\\') down = true;
@@ -246,8 +332,6 @@ Mountain peak(AST *a, int type) {
             if(m.sections.size() == 0) s.height = s.rep;
             else s.height = m.sections[m.sections.size() - 1].height + s.rep;
         }
-
-
         if(m.max_height < s.height) m.max_height = s.height;
         if(m.min_height > s.height) m.min_height = s.height;
         m.sections.push_back(s);
@@ -289,13 +373,23 @@ Mountain valley(AST *a, int type) {
 
 //Store the concatenation of Section in a Mountain
 Mountain concatenation(AST *a) {
-    if(a == NULL) {
-        Mountain f;
-        return f;
-    }
-    else if(a->kind == ";") {
+    if(a->kind == ";") {
         Mountain l = concatenation(a->down);
         Mountain r = concatenation(a->down->right);
+        if(l.max_height < r.max_height) l.max_height = r.max_height;
+        if(l.min_height > r.min_height) l.min_height = l.max_height + r.min_height;
+        if(r.sections[0].sym == '-') {
+            if(l.sections[l.sections.size() - 1].sym == '/') r.sections[0].height = 1;
+            else r.sections[0].height = -1;
+        }
+        else if(r.sections[0].sym == '/') {
+            if(l.sections[l.sections.size() - 1].sym == '\\') {
+                --r.sections[0].height;
+                l.min_height = r.min_height;
+
+            }
+        }
+        r.sections[0].height += l.sections[l.sections.size() - 1].height;
         l.sections.insert(l.sections.end(), r.sections.begin(), r.sections.end());
         return l;
     }
@@ -303,20 +397,56 @@ Mountain concatenation(AST *a) {
         Section s;
         s.rep = atoi((a->down->text).c_str());
         s.sym = a->down->right->kind.c_str()[0];
+        if(s.sym == '/') {
+            s.height = s.rep;
+        }
+        else if(s.sym == '-') {
+            s.height = 0;
+        }
+        else {
+            s.height = -s.rep;
+        }
+
         Mountain m;
+        if(s.height > 0) {
+            m.max_height = s.height;
+            m.min_height = 0;
+        }
+        else if(s.height == 0) {
+            m.max_height = 0;
+            m.min_height = 0;
+        }
+        else {
+            m.max_height = 0;
+            m.min_height = s.height;
+        }
         m.sections.push_back(s);
         return m;
     }
     else {
+        if (Mountains.find(a->text) == Mountains.end() ) {
+            Mountain m;
+            return m;
+        }
         return Mountains[a->text];
     }
 }
 
+//Print all the mountains
+void print() {
+    for (map<string,Mountain>::iterator it=Mountains.begin(); it!=Mountains.end(); ++it) {
+        if(wellformed(it->second)) draw(it->second, it->first);
+        cout << endl;
+    }
 
-//Guardar altura en cada punto para hacer el draw y luego hacer ir una función recursiva en funcion de la altura máxima
+}
+
+
+//Guardar altura en cada punto para hacer el  y luego hacer ir una función recursiva en funcion de la altura máxima
 
 //Evaluate the AST tree and perform syntactic analysis
 void evaluate(AST *root) {
+    ++line_count;
     if(root == NULL) return;
     else if(root->kind == "is") {
         if(root->down->right->kind == "Peak") {
@@ -329,6 +459,18 @@ void evaluate(AST *root) {
         }
         else if(root->down->right->kind == ";") {
             Mountain m  = concatenation(root->down->right);
+            if(m.sections.size() > 0) Mountains[root->down->text] = m;
+            else {
+                stat = false;
+                Error e;
+                e.inst = line_count;
+                e.description = "The mountain " + root->down->text + " doesn't exist.";
+                errors.push(e);
+                //cout << RED << "error: " << RESET <<   << root->down->text << " doesn't exist." << endl << RESET;
+            }
+        }
+        else if(root->down->right->kind == "*" and root->down->right->down->right->kind != "intconst") {
+            Mountain m  = concatenation(root->down->right);
             Mountains[root->down->text] = m;
         }
         else {
@@ -336,33 +478,62 @@ void evaluate(AST *root) {
             numVars[root->down->text] = num;
         }
     }
+    else if(root->kind == "if") {
+        if(bool_operation(root->down)) evaluate(root->down->right->down);
+    }
+    else if(root->kind == "Complete") {
+        Mountain m = complete(root->down);
+        if(m.sections.size() > 0) Mountains[root->down->text] = m;
+        else {
+            stat = false;
+            Error e;
+            e.inst = line_count;
+            e.description = "The mountain " + root->down->text + " doesn't exist.";
+            errors.push(e);
+            //cout << RED << "error: " << RESET << "The mountain " << root->down->text << " doesn't exist." << endl;
+        }
+    }
+    else if(root->kind == "while") {
+        while(bool_operation(root->down)) evaluate(root->down->right->down);
+    }
     else if(root->kind == "Draw") {
         if(root->down->kind == ";") {
             Mountain m = concatenation(root->down);
-            draw(m);
+            draw(m, "M");
         }
         else {
-            draw(Mountains[root->down->text]);
+            if(Mountains[root->down->text].sections.size() > 0) draw(Mountains[root->down->text],root->down->text);
+            else {
+                stat = false;
+                Error e;
+                e.inst = line_count;
+                e.description = "The mountain " + root->down->text + " doesn't exist.";
+                errors.push(e);
+                //cout << RED << "error: " << RESET << "The mountain " << root->down->text << " doesn't exist." << endl;
+            }
         }
     }
     evaluate(root->right);
 }
 
-
-
+void print_errors(){
+    while(not errors.empty()) {
+        cout << line_count << ": ";
+        cout << RED << "error: " << RESET << errors.front().description << endl;
+        errors.pop();
+    }
+    cout << endl;
+}
 
 int main() {
   root = NULL;
+  stat = true;
   ANTLR(mountains(&root), stdin);
   evaluate(root->down);
+  stat = true;
+  print_errors();
   ASTPrint(root);
-  for (map<string,Mountain>::iterator it=Mountains.begin(); it!=Mountains.end(); ++it) {
-      cout << it->first << " max_height: " << it->second.max_height << " min_height: " << it->second.min_height << ' ' << endl;
-      for(int i = 0; i < it->second.sections.size(); ++i) {
-          cout << it->second.sections[i].rep << ' ' << it->second.sections[i].sym << " h: " << it->second.sections[i].height << ' ';
-      }
-      cout << endl;
-  }
+  print();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -391,7 +562,7 @@ int main() {
 #token PE "Peak"
 #token VA "Valley"
 #token DR "Draw"
-#token COM "Complete"
+#token COMP "Complete"
 #token HEI "Height"
 #token WEF "Wellformed"
 #token MAT "Match"
@@ -402,27 +573,28 @@ int main() {
 #token OR "OR"
 #token AND "AND"
 #token NOT "NOT"
-#token ASTE "\#"
+#token PAD "\#"
 #token PARO "\("
 #token PARC "\)"
 #token COM "\,"
 #token PLUS "\+"
-
 #token SPACE "[\ \t \n]" << zzskip(); >>
 
 mountains: (assign | draw | complete | condic | iter)* <<#0=createASTlist(_sibling);>>;
 draw: DR^ PARO! mountoperation PARC!;
-complete: COM^ PARO! VAR PARC!;
+complete: COMP^ PARO! VAR PARC!;
 condic: IF^ PARO! queries PARC! mountains ENDIF!;
 queries: queriesand (OR^ queriesand)*;
 queriesand: queriesnot (AND^ queriesnot)*;
 queriesnot: (NOT^ |) query;
-query:  WEF^ PARO! VAR PARC! | MAT^ PARO! ASTE! VAR COM! ASTE! VAR PARC! | height (EQU^ | LESS^ | GREAT^ | ) numoperation | numoperation (EQU^ | LESS^ | GREAT^ | ) numoperation;
-height: HEI^ PARO! ASTE! VAR PARC!;
+query:  WEF^ PARO! VAR PARC! | MAT^ PARO! PAD! VAR COM! PAD! VAR PARC! | height (EQU^ | LESS^ | GREAT^ | ) numoperation | numoperation (EQU^ | LESS^ | GREAT^ | ) numoperation;
+height: HEI^ PARO! PAD! VAR PARC!;
+
+
 assign: VAR IS^ mountoperation;
-mountoperation: (concatenation | component) (CON^ (concatenation | component))* ;
+mountoperation: (concatenation | component) (CON^ (concatenation | component))*;
 component: (PE^ | VA^) PARO! numoperation COM! numoperation COM! numoperation PARC!;
-concatenation: NUM (SEP^ (UP | DOWN | TOP)  | ) | ASTE! VAR;
+concatenation: NUM (SEP^ (UP | DOWN | TOP))* | PAD! VAR;
 numoperation: (numoperationlow)  ((PLUS^ | TOP^) (numoperationlow))*;
 numoperationlow: (VAR |NUM) ((UP^ | SEP^) (VAR |NUM))*;
 iter: WH^ PARO! queries PARC! mountains ENDWH!;
